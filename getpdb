@@ -73,7 +73,6 @@ for item in listOfFiles:
         pdbFileName = item + sideChain + '.pdb'
     else:
         pdbFileName = item + '.pdb'
-    print("DEBUG ", directory)
     with open(directory + '/' +pdbFileName, 'w') as outputFile:
         outputFile.write(decompressedFileData)
     print('[Done]')
