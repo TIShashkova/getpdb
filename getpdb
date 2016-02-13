@@ -13,6 +13,18 @@ fileName = ''
 listOfFiles = []
 pdbHomeDir = '/pub/pdb/data/structures/divided/pdb'
 directory = getcwd()
+
+if len(sys.argv) == 1:
+    print()
+    print( "getpdb  is a script for downloading PDB files from " )
+    print( "        from the main PDB database(pdb.org) It accepts a list of ")
+    print( "        protein names on the command line or a file with newline" )
+    print( "        separated protein names" )
+    print()
+    print( "Usage:  getpdb protein1 protein2 protein3 proteins" )
+    print( "        getpdb -file textFile" )
+    print()
+
 if '-file' in sys.argv:
     fromFile = True
     fileNameIndex = sys.argv.index('-file') + 1
