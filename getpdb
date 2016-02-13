@@ -24,6 +24,7 @@ if len(sys.argv) == 1:
     print( "Usage:  getpdb protein1 protein2 protein3 proteins" )
     print( "        getpdb -file textFile" )
     print()
+    exit()
 
 if '-file' in sys.argv:
     fromFile = True
