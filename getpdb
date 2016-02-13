@@ -1,0 +1,84 @@
+#!/usr/bin/python
+
+from __future__ import print_function
+import sys
+from gzip   import GzipFile
+from io     import BytesIO
+from ftplib import FTP
+from os     import getcwd
+import ftplib 
+
+fromFile = False
+fileName = ''
+listOfFiles = []
+pdbHomeDir = '/pub/pdb/data/structures/divided/pdb'
+directory = getcwd()
+if '-file' in sys.argv:
+    fromFile = True
+    fileNameIndex = sys.argv.index('-file') + 1
+    fileName = sys.argv[fileNameIndex]
+
+if fromFile:
+    fileData = open(fileName).read()
+    listOfFiles = fileData.strip().split('\n')
+else:
+    listOfFiles = sys.argv[1:]
+    
+ftp = FTP('ftp.wwpdb.org')
+ftp.login()
+ftp.cwd(pdbHomeDir)
+
+for item in listOfFiles:
+    wantChain = False
+    sideChain = ''
+    if len(item) > 4:
+        if len(item) == 5:
+            wantChain = True
+            sideChain = item[-1]
+            item = item[:-1]
+        else:
+            print('Non standard PDB file: ', item, ' ... skipping')
+            continue
+    pdbSubDirectory = item[1:3]
+    ftp.cwd(pdbSubDirectory)
+    fileNameInDatabase = 'pdb' + item + '.ent.gz'
+    ftpCommand = 'RETR ' + fileNameInDatabase
+    binaryBlob = BytesIO()
+
+    if wantChain:
+        print('Downloading sidechain ', sideChain, ' of protein ', item, ' ... ', end='')
+    else:
+        print('Downloading protein ', item, ' ... ',end='')
+
+        
+    try:
+        ftp.retrbinary(ftpCommand, binaryBlob.write)
+    except ftplib.error_perm:
+        print('file does not exist')
+        binaryBlob.close()
+        ftp.cwd(pdbHomeDir)
+        continue
+    binaryBlob.seek(0)
+    
+    decompressedFile = GzipFile(fileobj=binaryBlob)
+    decompressedFileData = decompressedFile.read()
+
+    if wantChain:
+        decompressedFileDataLines = decompressedFileData.strip().split('\n')
+        filterNonAtoms = [line for line in decompressedFileDataLines if line.startswith('ATOM')]
+        filterNotRightSidechain = [line for line in filterNonAtoms if line[21:22] == sideChain]
+        decompressedFileData = '\n'.join(filterNotRightSidechain)
+
+    if wantChain:
+        pdbFileName = item + sideChain + '.pdb'
+    else:
+        pdbFileName = item + '.pdb'
+    print("DEBUG ", directory)
+    with open(directory + '/' +pdbFileName, 'w') as outputFile:
+        outputFile.write(decompressedFileData)
+    print('[Done]')
+    outputFile.close()
+    binaryBlob.close()
+    ftp.cwd(pdbHomeDir)
+
+ftp.quit()
