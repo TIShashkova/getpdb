@@ -1,4 +1,4 @@
-#!/usr/bin/python
+#!/usr/bin/python3
 
 from __future__ import print_function
 import sys
@@ -7,62 +7,46 @@ from io     import BytesIO
 from ftplib import FTP
 from os     import getcwd
 import ftplib 
+import argparse, os
+import os
 
-fromFile = False
-fileName = ''
 listOfFiles = []
 pdbHomeDir = '/pub/pdb/data/structures/divided/pdb'
-directory = getcwd()
 
-if len(sys.argv) == 1:
-    print()
-    print( "getpdb  is a script for downloading PDB files from " )
-    print( "        from the main PDB database(pdb.org) It accepts a list of ")
-    print( "        protein names on the command line or a file with newline" )
-    print( "        separated protein names" )
-    print()
-    print( "Usage:  getpdb protein1 protein2 protein3 proteins" )
-    print( "        getpdb -file textFile" )
-    print()
-    exit()
+def parser():
+    description = f"""
+    getpdb  is a script for downloading PDB files from the main PDB database(pdb.org) It accepts a list of 
+    protein names on the command line or a file with newline separated protein names
+"""
+    parser = argparse.ArgumentParser(description=description,
+                                     formatter_class=argparse.RawDescriptionHelpFormatter)
+    parser.add_argument('--pdb', required=True, nargs='*',
+                        help="PDB IDs like a list rotein1 protein2 protein3 proteins")
+    parser.add_argument('-o', '--output-dir', default=getcwd(),
+                        help="Path to dowloaded PDB files")
+    parser.add_argument('-f', '--file',
+                        help="Textfile with list of PDB ID")
+    parser.add_argument('-v', '--verbose', default=False, action='store_true',
+                        help="Print data in console")
+    return parser.parse_args()
 
-if '-file' in sys.argv:
-    fromFile = True
-    fileNameIndex = sys.argv.index('-file') + 1
-    fileName = sys.argv[fileNameIndex]
 
-if fromFile:
-    fileData = open(fileName).read()
-    listOfFiles = fileData.strip().split('\n')
-else:
-    listOfFiles = sys.argv[1:]
-    
-ftp = FTP('ftp.wwpdb.org')
-ftp.login()
-ftp.cwd(pdbHomeDir)
 
-for item in listOfFiles:
-    wantChain = False
-    sideChain = ''
-    if len(item) > 4:
-        if len(item) == 5:
-            wantChain = True
-            sideChain = item[-1]
-            item = item[:-1]
-        else:
-            print('Non standard PDB file: ', item, ' ... skipping')
-            continue
-    pdbSubDirectory = item[1:3]
+def getpdb(pdbID, wantChain, sideChain):
+    ftp = FTP('ftp.wwpdb.org')
+    ftp.login()
+    ftp.cwd(pdbHomeDir)
+
+    pdbSubDirectory = pdbID[1:3]
     ftp.cwd(pdbSubDirectory)
-    fileNameInDatabase = 'pdb' + item + '.ent.gz'
+    fileNameInDatabase = f'pdb{pdbID}.ent.gz'
     ftpCommand = 'RETR ' + fileNameInDatabase
     binaryBlob = BytesIO()
 
     if wantChain:
-        print('Downloading sidechain ', sideChain, ' of protein ', item, ' ... ', end='')
+        print('Downloading sidechain ', sideChain, ' of protein ', pdbID, ' ... \n', end='')
     else:
-        print('Downloading protein ', item, ' ... ',end='')
-
+        print('Downloading protein ', pdbID, ' ... \n',end='')
         
     try:
         ftp.retrbinary(ftpCommand, binaryBlob.write)
@@ -70,7 +54,7 @@ for item in listOfFiles:
         print('file does not exist')
         binaryBlob.close()
         ftp.cwd(pdbHomeDir)
-        continue
+
     binaryBlob.seek(0)
     
     decompressedFile = GzipFile(fileobj=binaryBlob)
@@ -81,16 +65,60 @@ for item in listOfFiles:
         filterNonAtoms = [line for line in decompressedFileDataLines if line.startswith('ATOM')]
         filterNotRightSidechain = [line for line in filterNonAtoms if line[21:22] == sideChain]
         decompressedFileData = '\n'.join(filterNotRightSidechain)
-
-    if wantChain:
-        pdbFileName = item + sideChain + '.pdb'
-    else:
-        pdbFileName = item + '.pdb'
-    with open(directory + '/' +pdbFileName, 'w') as outputFile:
-        outputFile.write(decompressedFileData)
-    print('[Done]')
-    outputFile.close()
+    
+    
     binaryBlob.close()
-    ftp.cwd(pdbHomeDir)
+    ftp.quit()
+    #print(decompressedFileData)
+    return decompressedFileData
 
-ftp.quit()
+
+def save(data, pdbID, wantChain, sideChain, output_dir):
+    if wantChain:
+            pdbFileName = pdbID + sideChain + '.pdb'
+    else:
+            pdbFileName = pdbID + '.pdb'
+
+    with open(os.path.join(output_dir, pdbFileName), 'wb') as outputFile:
+        outputFile.write(data)
+    outputFile.close()
+
+
+
+def main():
+    args = parser()
+    if args.file:
+        fileData = open(fileName).read()
+        listOfFiles = fileData.strip().split('\n')
+    else:
+        listOfFiles = args.pdb
+
+    print(listOfFiles)
+    for pdbID in listOfFiles:
+        wantChain = False
+        sideChain = ''
+        if len(pdbID) > 4:
+            if len(pdbID) == 5:
+                wantChain = True
+                sideChain = pdbID[-1]
+                pdbID = pdbID[:-1]
+            else:
+                print('Non standard PDB file: ', pdbID, ' ... skipping')
+                continue
+        try:
+            data = getpdb(pdbID, wantChain, sideChain)
+        except Exception as e:
+            print(e)
+            continue
+        save(data, pdbID, wantChain, sideChain, args.output_dir)
+    
+        if args.verbose:
+            print(data)
+
+        print('[Done]')
+
+
+
+
+if __name__ == '__main__':
+    main()
